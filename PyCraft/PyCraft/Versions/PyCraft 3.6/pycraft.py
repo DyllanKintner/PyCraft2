@@ -25,7 +25,7 @@ Entity.default_shader = lit_with_shadows_shader
 sun = DirectionalLight(parent=scene, y=10, z=10, shadows=True)
 sun.look_at(Vec3(0,0,0))
 
-game_version = '3.2'
+game_version = '3.6'
 world_data = []
 hearts = []
 hungers = []
@@ -43,6 +43,8 @@ block_class_mapping = {}
 paused = False
 spawnpoint = Vec3(*[0,0,0])
 isanimating = False
+right_click_function_buttons = []
+craftingslots = []
 
 Text.default_font = "PyCraft/Textures/Fonts/mc.ttf"
 vignette = Entity(
@@ -73,34 +75,6 @@ class Cloud(Entity):
                             position=(x,y,z),
                             parent=self,
                         )
-
-
-
-# Gun class definition
-class Gun(Entity):
-    def __init__(self, **kwargs):
-        super().__init__(model="cube", color=color.black, scale=(0.2, 0.05, 0.05), position=(0.5, -0.3, 0))  # Gun model
-        self.parent = camera  # Attach the gun to the camera
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-    def shoot(self):
-        self.shooting_sound.play()  # Play the shooting sound
-        hit_info = raycast(camera.world_position, camera.forward, distance=10)
-        if hit_info.hit:
-            print(f"Hit: {hit_info.entity}")
-            if hasattr(hit_info.entity, 'destroy'):
-                hit_info.entity.destroy()
-
-# Initialize the gun
-gun = Gun()
-
-# Handle input for shooting
-def input(key):
-    if key == 'left mouse down':  # Trigger shooting when left mouse button is pressed
-        gun.shoot()  # Call the shoot function when left-click is pressed
-
-# Your other game logic here...
 
 
 
@@ -235,8 +209,28 @@ class OakLogVoxel(Button):
         self.highlight_color = color.rgb(r, g, b)
 block_class_mapping['OakLogVoxel'] = OakLogVoxel
 class TreeLeavesVoxel(Button):
-    block_texture='PyCraft/Textures/treeleaves.png'
+    block_texture='PyCraft/Textures/treeleaves2.png'
     block_icon = 'PyCraft/Textures/leavesicon.png'
+    block_color = color.hsv(0, 0, .9)
+    block_model = 'cube'
+    def __init__(self, position=(0,0,0)):
+        base_color = color.hsv(0, 0, .9)
+        super().__init__(parent=scene,
+            position=position,
+            model='cube',
+            origin_y=.5,
+            texture='PyCraft/Textures/treeleaves2.png',
+            color=base_color,
+            isblock = True
+        )
+        r = min(base_color.r + 0.1, 1.0)
+        g = min(base_color.g + 0.1, 1.0)
+        b = min(base_color.b + 0.1, 1.0)
+        self.highlight_color = color.rgb(r, g, b)
+block_class_mapping['TreeLeavesVoxel'] = TreeLeavesVoxel
+class SakuraLeaves(Button):
+    block_texture='PyCraft/Textures/treeleaves.png'
+    block_icon = 'PyCraft/Textures/sakuraleavesicon.png'
     block_color = color.hsv(0, 0, .9)
     block_model = 'cube'
     def __init__(self, position=(0,0,0)):
@@ -253,7 +247,7 @@ class TreeLeavesVoxel(Button):
         g = min(base_color.g + 0.1, 1.0)
         b = min(base_color.b + 0.1, 1.0)
         self.highlight_color = color.rgb(r, g, b)
-block_class_mapping['TreeLeavesVoxel'] = TreeLeavesVoxel
+block_class_mapping['SakuraLeaves'] = SakuraLeaves
 class Fire(Button):
     block_texture='PyCraft/Textures/fireatlas.png'
     block_icon = 'PyCraft/Textures/grassblock.png'
@@ -380,6 +374,7 @@ class ObsidianVoxel(Button):
             origin_y=.5,
             texture='PyCraft/Textures/obsidian.png',
             color=base_color,
+            blockclass='obsidian',
             isblock = True
         )
         r = min(base_color.r + 0.1, 1.0)
@@ -647,21 +642,31 @@ class DroppedBlock(Entity):
         self.animating = True
         target_position = player.position - Vec3(0, 0.5, 0)
         for i in slots:
-            if not i.equipped:
+            if not i.equipped or i.equipped == block_class_mapping[self.block_class.__name__]:
                 self.pickingup = True
                 self.position = lerp(self.position, target_position, 0.1)
                 break
             self.pickingup = False
         if distance(self.position, player.position) < 1:
+            self.searching = True
             for i in slots:
-                if not i.equipped:
-                    i.hand_color = block_class_mapping[self.block_class.__name__].block_color
-                    i.texture = block_class_mapping[self.block_class.__name__].block_icon
-                    i.equipped = block_class_mapping[self.block_class.__name__]
-                    i.visible = True
-                    update_equipped_slot(slotselected)
+                if i.equipped == block_class_mapping[self.block_class.__name__] and i.amount < 64:
+                    i.amount += 1
                     destroy(self)
+                    self.searching = False
                     break
+            if self.searching:
+                for i in slots:
+                    if not i.equipped:
+                        i.hand_color = block_class_mapping[self.block_class.__name__].block_color
+                        i.texture = block_class_mapping[self.block_class.__name__].block_icon
+                        i.equipped = block_class_mapping[self.block_class.__name__]
+                        i.amount += 1
+                        i.visible = True
+                        self.searching = False
+                        update_equipped_slot(slotselected)
+                        destroy(self)
+                        break
         self.animating = False
 
 class WoodPickaxe(Entity):
@@ -716,7 +721,7 @@ class DiamondPickaxe(Entity):
     defaultrotation = (180,80,145)
     animationrotation = (180, 80, 205)
     yorg = 0.75
-    classaffect = ['stone', 'ore']
+    classaffect = ['stone', 'ore', 'obsidian']
     istool = True
 
 class Cookie(Entity):
@@ -727,6 +732,17 @@ class Cookie(Entity):
     defaultrotation = (0,35,10)
     animationrotation = (55, 105, -50)
     yorg = 0.00001
+    classaffect = ['stone', 'ore']
+    istool = True
+
+class Stick(Entity):
+    block_texture='PyCraft/Textures/stick.png'
+    block_icon = 'PyCraft/Textures/stick.png'
+    block_color = color.hsv(0, 0, .9)
+    block_model = 'quad'
+    defaultrotation = (0,70,-20)
+    animationrotation = (55, 105, -50)
+    yorg = 0.001
     classaffect = ['stone', 'ore']
     istool = True
 
@@ -810,36 +826,42 @@ worldgenerationvoxels = {
     'deepvoxel': Voxel,
 }
 
-recipes = {
-    (OakLogVoxel, OakLogVoxel, OakLogVoxel, OakLogVoxel): CraftingTableVoxel,
-
+crafting_recipes = {
+    ('OakPlanksVoxel', 'OakPlanksVoxel', None, 'OakPlanksVoxel', 'OakPlanksVoxel', None, None, None, None): (CraftingTableVoxel, 1),
+    ('OakLogVoxel', None, None, None, None, None, None, None, None): (OakPlanksVoxel, 4),
+    ('OakPlanksVoxel', None, None, 'OakPlanksVoxel', None, None, None, None, None): (Stick, 4),
+    ('Voxel', 'Voxel', 'Voxel', None, 'Stick', None, None, 'Stick', None): (StonePickaxe, 1),
+    ('OakPlanksVoxel', 'OakPlanksVoxel', 'OakPlanksVoxel', None, 'Stick', None, None, 'Stick', None): (WoodPickaxe, 1),
 }
 
-inventory_crafting_grid = [None, None, None, None]
+crafting_grid = [None, None, None, None, None, None, None, None, None]
+
+
 current_crafting_result = None
 
 block_break_times = {
-    'Voxel': 0.7,
+    'Voxel': 4.0,
     'GroundVoxel': 0.8,
     'BrownVoxel': 0.5,
     'OakPlanksVoxel': 0.9,
-    'IronOreVoxel': 2.0,
-    'CoalOreVoxel': 1.2,
+    'IronOreVoxel': 7.5,
+    'CoalOreVoxel': 5.0,
     'OakLogVoxel': 1.0,
     'TreeLeavesVoxel': 0.3,
     'GlassVoxel': 0.2,
     'WhiteWoolVoxel': 0.4,
     'BlackWoolVoxel': 0.4,
     'RedWoolVoxel': 0.4,
-    'Bedrock': float('inf')  # essentially unbreakable
+    'ObsidianVoxel': 50.0,
+    'Bedrock': float('inf')  # essentially unbreakable,
 }
 
 mining_tools = {
-    WoodPickaxe: 0.85,
-    StonePickaxe: 0.7,
-    IronPickaxe: 0.55,
-    GoldPickaxe: 0.4,
-    DiamondPickaxe: 0.3,
+    WoodPickaxe: 0.375,
+    StonePickaxe: 0.1875,
+    IronPickaxe: 0.125,
+    GoldPickaxe: 0.0625,
+    DiamondPickaxe: 0.1,
     None: 1,
 }
 
@@ -885,6 +907,7 @@ inventory_blocks_pg3 = [
     {'voxel_class': DiamondPickaxe, 'texture': DiamondPickaxe.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Diamond Pickaxe'},
     {'voxel_class': Cookie, 'texture': Cookie.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Cookie'},
     {'voxel_class': FlintAndSteel, 'texture': FlintAndSteel.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Flint and Steel'},
+    {'voxel_class': Stick, 'texture': Stick.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Stick'},
 ]
 
 inventory_blocks_pg4 = [
@@ -1017,7 +1040,54 @@ mods_folder = f'{script_dir}\PyCraft\mods'
 
 mod_states = load_mod_states(mods_folder)
 
-
+def generate_tree(x, y, z):
+    tree_type = random.randint(1,2)
+    if tree_type == 1:
+        leaves = TreeLeavesVoxel
+        leavestype = 'TreeLeavesVoxel'
+    elif tree_type == 2:
+        leaves = SakuraLeaves
+        leavestype = 'SakuraLeaves'
+    voxel = OakLogVoxel(position=(x,y+1,z))
+    world_data.append({'position': [x, y+1, z], 'block_type': 'OakLogVoxel'})
+    voxel = OakLogVoxel(position=(x,y+2,z))
+    world_data.append({'position': [x, y+2, z], 'block_type': 'OakLogVoxel'})
+    voxel = OakLogVoxel(position=(x,y+3,z))
+    world_data.append({'position': [x, y+3, z], 'block_type': 'OakLogVoxel'})
+    voxel = leaves(position=(x,y+3,z+1))
+    world_data.append({'position': [x, y+3, z+1], 'block_type': leavestype})
+    voxel = leaves(position=(x+1,y+3,z+1))
+    world_data.append({'position': [x+1, y+3, z+1], 'block_type': leavestype})
+    voxel = leaves(position=(x-1,y+3,z+1))
+    world_data.append({'position': [x-1, y+3, z+1], 'block_type': leavestype})
+    voxel = leaves(position=(x,y+3,z-1))
+    world_data.append({'position': [x, y+3, z-1], 'block_type': leavestype})
+    voxel = leaves(position=(x+1,y+3,z-1))
+    world_data.append({'position': [x+1, y+3, z-1], 'block_type': leavestype})
+    voxel = leaves(position=(x-1,y+3,z-1))
+    world_data.append({'position': [x-1, y+3, z-1], 'block_type': leavestype})
+    voxel = leaves(position=(x+1,y+3,z))
+    world_data.append({'position': [x+1, y+3, z], 'block_type': leavestype})
+    voxel = leaves(position=(x-1,y+3,z))
+    world_data.append({'position': [x-1, y+3, z], 'block_type': leavestype})
+    voxel = leaves(position=(x,y+4,z+1))
+    world_data.append({'position': [x, y+4, z+1], 'block_type': leavestype})
+    voxel = leaves(position=(x+1,y+4,z+1))
+    world_data.append({'position': [x+1, y+4, z+1], 'block_type': leavestype})
+    voxel = leaves(position=(x-1,y+4,z+1))
+    world_data.append({'position': [x-1, y+4, z+1], 'block_type': leavestype})
+    voxel = leaves(position=(x,y+4,z-1))
+    world_data.append({'position': [x, y+4, z-1], 'block_type': leavestype})
+    voxel = leaves(position=(x+1,y+4,z-1))
+    world_data.append({'position': [x+1, y+4, z-1], 'block_type': leavestype})
+    voxel = leaves(position=(x-1,y+4,z-1))
+    world_data.append({'position': [x-1, y+4, z-1], 'block_type': leavestype})
+    voxel = leaves(position=(x+1,y+4,z))
+    world_data.append({'position': [x+1, y+4, z], 'block_type': leavestype})
+    voxel = leaves(position=(x-1,y+4,z))
+    world_data.append({'position': [x-1, y+4, z], 'block_type': leavestype})
+    voxel = leaves(position=(x,y+5,z))
+    world_data.append({'position': [x, y+5, z], 'block_type': leavestype})
 
 def generate_world(worldseed, worldsize, worlddepth):
     global worlddimensions, min_y, seedvalue, worldver, inventory_blocks_pg1, inventory_blocks_pg2
@@ -1044,46 +1114,7 @@ def generate_world(worldseed, worldsize, worlddepth):
                     block_type = (type(voxel).__name__)
                     treegenerator = random.randint(0,65)
                     if treegenerator == 5:
-                        voxel = OakLogVoxel(position=(x,y+1,z))
-                        world_data.append({'position': [x, y+1, z], 'block_type': 'OakLogVoxel'})
-                        voxel = OakLogVoxel(position=(x,y+2,z))
-                        world_data.append({'position': [x, y+2, z], 'block_type': 'OakLogVoxel'})
-                        voxel = OakLogVoxel(position=(x,y+3,z))
-                        world_data.append({'position': [x, y+3, z], 'block_type': 'OakLogVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+3,z+1))
-                        world_data.append({'position': [x, y+3, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+3,z+1))
-                        world_data.append({'position': [x+1, y+3, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+3,z+1))
-                        world_data.append({'position': [x-1, y+3, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+3,z-1))
-                        world_data.append({'position': [x, y+3, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+3,z-1))
-                        world_data.append({'position': [x+1, y+3, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+3,z-1))
-                        world_data.append({'position': [x-1, y+3, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+3,z))
-                        world_data.append({'position': [x+1, y+3, z], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+3,z))
-                        world_data.append({'position': [x-1, y+3, z], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+4,z+1))
-                        world_data.append({'position': [x, y+4, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+4,z+1))
-                        world_data.append({'position': [x+1, y+4, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+4,z+1))
-                        world_data.append({'position': [x-1, y+4, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+4,z-1))
-                        world_data.append({'position': [x, y+4, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+4,z-1))
-                        world_data.append({'position': [x+1, y+4, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+4,z-1))
-                        world_data.append({'position': [x-1, y+4, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+4,z))
-                        world_data.append({'position': [x+1, y+4, z], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+4,z))
-                        world_data.append({'position': [x-1, y+4, z], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+5,z))
-                        world_data.append({'position': [x, y+5, z], 'block_type': 'TreeLeavesVoxel'})
+                        generate_tree(x,y,z)
                 elif y == min_y:
                     voxel = worldgenerationvoxels['minvoxel'](position=position)
                     block_type = (type(voxel).__name__)
@@ -1181,7 +1212,7 @@ def build_barriers(dimensions, miny):
 
 
 def build_hotbar():
-    global hotbar, selector, slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8, slot9, slotselected, hearts, slots
+    global hotbar, selector, slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8, slot9, slotselected, hearts, slots, slot1amount, slot2amount, slot3amount, slot4amount, slot5amount, slot6amount, slot7amount, slot8amount, slot9amount, right_click_function_buttons
     hotbar = Entity(
     parent=camera.ui,
     model='quad',
@@ -1190,7 +1221,6 @@ def build_hotbar():
     position=(0,-0.45,1),
     visible=True  
     )
-    
     selector = Button( 
                     color=color.rgb(0.2, 0.2, 0.2), 
                     position=(-0.225, -0.45, 0), 
@@ -1206,17 +1236,18 @@ def build_hotbar():
                     hand_color = color.hsv(0, 0, .9),
                     on_click = lambda: equip_block(slot1) if holding_block else swap_block(slot1),
                     equipped=Voxel if creative else False,
-                    amount = 1,
+                    amount = 0,
                     visible = True if creative else False
                     )
     slot1amount = Text(
-        parent=camera.ui, 
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
         text=str(slot1.amount),   
         origin=(0, 0),      
         scale=1,            
         color=color.white,   
-        position=(-0.21, -0.45, -2),
-        visible=False           
+        position=(-0.215, -0.463, -2),
+        visible=True           
     )   
     slot2 = Button( 
                     color=color.hsv(0, 0, .9),
@@ -1229,6 +1260,16 @@ def build_hotbar():
                     amount = 0,
                     visible = True if creative else False
                     )
+    slot2amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(slot2.amount),   
+        origin=(0, 0),      
+        scale=1,            
+        color=color.white,   
+        position=(-0.16, -0.463, -2),
+        visible=True           
+    )
     slot3 = Button( 
                     color=color.hsv(0, 0, 0.9),
                     position=(-0.114, -0.45, -1), 
@@ -1239,6 +1280,16 @@ def build_hotbar():
                     amount = 0,
                     equipped=False
                     )
+    slot3amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(slot3.amount),   
+        origin=(0, 0),      
+        scale=1,            
+        color=color.white,   
+        position=(-0.105, -0.463, -2),
+        visible=True           
+    )
     slot4 = Button( 
                     color=color.hsv(0, 0, 1),
                     position=(-0.057, -0.45, -1), 
@@ -1249,6 +1300,16 @@ def build_hotbar():
                     amount = 0,
                     visible = True if creative else False
                     )
+    slot4amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(slot4.amount),   
+        origin=(0, 0),      
+        scale=1,            
+        color=color.white,   
+        position=(-0.05, -0.463, -2),
+        visible=True           
+    )
     slot5 = Button( 
                     color=color.hsv(0, 0, .9),
                     texture='PyCraft/Textures/oakplanksblock.png',
@@ -1260,6 +1321,16 @@ def build_hotbar():
                     amount = 0,
                     visible = True if creative else False
                     )
+    slot5amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(slot5.amount),   
+        origin=(0, 0),      
+        scale=1,            
+        color=color.white,   
+        position=(0.0075, -0.463, -2),
+        visible=True           
+    )
     slot6 = Button( 
                     color=color.hsv(0, 0, .9),
                     texture='PyCraft/Textures/glassblock.png',
@@ -1271,31 +1342,82 @@ def build_hotbar():
                     amount = 0,
                     visible = True if creative else False
                     )
+    slot6amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(slot6.amount),   
+        origin=(0, 0),      
+        scale=1,            
+        color=color.white,   
+        position=(0.065, -0.463, -2),
+        visible=True           
+    )
     slot7 = Button( 
                     color=color.hsv(0, 0, .9),
                     texture='PyCraft/Textures/dirtblock.png',
                     position=(0.110, -0.45, -1), 
                     scale=(0.045, 0.045),
+                    hand_color = color.hsv(0,0,.9),
+                    on_click = lambda: equip_block(slot7) if holding_block else swap_block(slot7),
                     equipped=None,
+                    amount = 0,
                     visible=False
                     )
+    slot7amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(slot7.amount),   
+        origin=(0, 0),      
+        scale=1,            
+        color=color.white,   
+        position=(0.12, -0.463, -2),
+        visible=True           
+    )
     slot8 = Button( 
                     color=color.hsv(0, 0, .9),
                     texture='PyCraft/Textures/dirtblock.png',
                     position=(0.165, -0.45, -1), 
                     scale=(0.045, 0.045), 
+                    hand_color = color.hsv(0,0,.9),
+                    on_click = lambda: equip_block(slot8) if holding_block else swap_block(slot8),
                     equipped=None,
+                    amount = 0,
                     visible=False
                     )
+    slot8amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(slot8.amount),   
+        origin=(0, 0),      
+        scale=1,            
+        color=color.white,   
+        position=(0.175, -0.463, -2),
+        visible=True           
+    )
     slot9 = Button( 
                     color=color.hsv(0, 0, .9),
                     texture='PyCraft/Textures/dirtblock.png',
                     position=(0.22, -0.45, -1), 
-                    scale=(0.045, 0.045), 
+                    scale=(0.045, 0.045),
+                    hand_color = color.hsv(0,0,.9),
+                    on_click = lambda: equip_block(slot9) if holding_block else swap_block(slot9), 
                     equipped=None,
+                    amount = 0,
                     visible=False
                     )
+    slot9amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(slot9.amount),   
+        origin=(0, 0),      
+        scale=1,            
+        color=color.white,   
+        position=(0.23, -0.463, -2),
+        visible=True           
+    )
     slots = [slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8, slot9]
+    for i in slots:
+        right_click_function_buttons.append(i)
     spacing = -0.0235
     if not creative:
         for i in range(10):
@@ -1344,9 +1466,9 @@ def rebuild_world_from_data():
 
         
 
-def save_world(filename=f'{script_dir}\\PyCraft\\Worlds\\world_save.json'):
+def save_world(filename=f'{script_dir.parent.parent}\\Worlds\\world_save.json'):
     global worlddimensions, min_y, saved_world_name
-    saved_world_name = filename[43:]
+    saved_world_name = filename[::-1].split("\\", 1)[0][::-1]
     print(saved_world_name)
     save_data = {
         'world_data': world_data,
@@ -1355,7 +1477,9 @@ def save_world(filename=f'{script_dir}\\PyCraft\\Worlds\\world_save.json'):
         'world_version': game_version,
         'last_save_date': f'{current_datetime.date()}',
         'creative': creative,
-        'hotbar': [slot.equipped.__name__ if slot.equipped and isinstance(slot.equipped, type) else slot.equipped if slot.equipped else None for slot in slots]
+        'health': health,
+        'hotbar': [slot.equipped.__name__ if slot.equipped and isinstance(slot.equipped, type) else slot.equipped if slot.equipped else None for slot in slots],
+        'hotbaramounts': [slot.amount for slot in slots]
     }
     if world_mods != []:
         save_data['world_mods'] = world_mods
@@ -1364,9 +1488,19 @@ def save_world(filename=f'{script_dir}\\PyCraft\\Worlds\\world_save.json'):
     with open(filename, 'w') as f:
         json.dump(save_data, f)
 
-def load_world(filename):
-    global world_data, worlddimensions, worldver, seedvalue, saved_world_name, inventory_blocks_pg1, inventory_blocks_pg2, slots, last_y_position, creative
-    saved_world_name = filename[43:]
+def outdated_check(filename):
+    with open(filename, 'r') as f:
+        save_data = json.load(f)
+    worldver = save_data.get('world_version', 'Unknown')
+    if worldver != game_version:
+        outdated_popup(filename, worldver)
+        return
+    else:
+        load_world(filename)
+
+def load_world(filename, olderworld=False):
+    global world_data, worlddimensions, worldver, seedvalue, saved_world_name, inventory_blocks_pg1, inventory_blocks_pg2, slots, last_y_position, creative, health
+    saved_world_name = filename[::-1].split("\\", 1)[0][::-1]
     with open(filename, 'r') as f:
         save_data = json.load(f)
     world_data = save_data['world_data']
@@ -1375,6 +1509,8 @@ def load_world(filename):
     seedvalue = save_data.get('world_seed', 'Unknown')
     neededmods = save_data.get('world_mods', None)
     iscreative = save_data.get('creative', 'Unknown')
+    loadedhealth = save_data.get('health', 100)
+    health = loadedhealth
     if iscreative and not iscreative == 'Unknown':
         creative = True
     elif iscreative == 'Unknown':
@@ -1389,11 +1525,15 @@ def load_world(filename):
                 missingmods.append(mod)
     if missingmods != []:
         print(f"World '{filename}' requires mods: {missingmods}")
+        if olderworld:
+            open_play_menu()
         return
     try:
         worldproperties = save_data['world_size']
     except:
         print(f'ERROR: World {filename} is corrupt')
+        if olderworld:
+            open_play_menu()
         return
     load_mods(mod_states, mods_folder, game_api)
     destroy_play_menu()
@@ -1414,9 +1554,21 @@ def load_world(filename):
         else:
             slot.equipped = None
             slot.visible = False
+    hotbar_amounts = save_data.get('hotbaramounts', [])
+    for slot, amount in zip(slots, hotbar_amounts):
+        if amount:
+            slot.amount = amount
+        else:
+            if slot.equipped:
+                slot.amount = 1
+            else:
+                slot.amount = 0
     last_y_position = None
     player.position = Vec3(*player_position)
     mouse.locked = True
+    if not creative:
+        update_hearts()
+    update_equipped_slot(slotselected)
 
 def get_world_timesaved(filename):
     with open(filename, 'r') as f:
@@ -1598,7 +1750,7 @@ def build_pause_menu():
         highlight_color=color.rgb(0.745, 0.729, 1),
         scale=(0.2, 0.025),
         position=(0, -0.1, -1),  
-        on_click = lambda: save_world(f'{script_dir}\\PyCraft\\Worlds\\{saved_world_name}')
+        on_click = lambda: save_world(f'{script_dir.parent.parent}\\Worlds\\{saved_world_name}')
         )
     else:
         save_button = Button(
@@ -1634,7 +1786,7 @@ def build_pause_menu():
                     highlight_color=color.rgb(0.745, 0.729, 1),
                     scale=(0.2, 0.025),
                     position=(0.3, -0.1, -1),  
-                    on_click = lambda: save_world(f'{script_dir}\\PyCraft\\Worlds\\{save_name_field.text}.json')
+                    on_click = lambda: save_world(f'{script_dir.parent.parent}\\Worlds\\{save_name_field.text}.json')
                 )
                 save_field_open = True
 
@@ -1933,7 +2085,8 @@ def open_play_menu():
     global file_buttons, createworld_button, worldseedinput, play_menu_open, returntomenu_button, creative, mode_select_button, world_size, world_dimensions_button, world_depth_button, world_depth
     destroy_main_menu()
     play_menu_open = True
-    folder_path = f'{script_dir}\\PyCraft\\Worlds'
+    folder_path = f'{script_dir.parent.parent}\\Worlds'
+    os.makedirs(folder_path, exist_ok=True)
     files = os.listdir(folder_path)
     scroll_container = Entity(parent=camera.ui, position = (0,0.3), scale=(1,1), visible=True)
     scroll_offset = 0
@@ -1941,17 +2094,17 @@ def open_play_menu():
     world_size = 10
     world_depth = 4
     for i, file_name in enumerate(files):
-        filepath = f'{script_dir}/PyCraft/Worlds/{file_name}'
+        filepath = f'{script_dir.parent.parent}\\Worlds\\{file_name}'
         worldfilebutton = Button(
             parent=scroll_container,
             font="PyCraft/Textures/Fonts/mc.ttf",
-            text=file_name,
+            text=file_name[:-5],
             color=color.light_gray,
             texture="PyCraft/Textures/buttontexture.png",
             highlight_color=color.rgb(0.745, 0.729, 1),
             scale=(0.25,0.05),
             position=(-0.25, (-i * 0.06) + 0.1, -2),
-            on_click = lambda file_name=file_name: load_world(f'{script_dir}\\PyCraft\\Worlds\\{file_name}')
+            on_click = lambda file_name=file_name: outdated_check(f'{script_dir.parent.parent}\\Worlds\\{file_name}')
         )
         world_date = Text(
             parent=scroll_container,
@@ -1969,7 +2122,7 @@ def open_play_menu():
             highlight_color=color.rgb(0.745, 0.729, 1),
             scale=(0.15,0.05),
             position=(0.25, (-i * 0.06) + 0.1, -2),
-            on_click = lambda file_name=file_name: delete_world(f'{script_dir}/PyCraft/Worlds/{file_name}')
+            on_click = lambda file_name=file_name: delete_world(f'{script_dir.parent.parent}\\Worlds\\{file_name}')
         )
         file_buttons.append(worldfilebutton)
         file_buttons.append(worlddeletebutton)
@@ -2105,7 +2258,71 @@ def delete_world(filepath):
     destroy(createworld_button)
     destroy(worldseedinput)
     destroy(returntomenu_button)
+    destroy(mode_select_button)
+    destroy(world_dimensions_button)
+    destroy(world_depth_button)
+    
     open_play_menu()
+def outdated_popup(filename, worldversion):
+    global file_buttons, outdated_version_text, goback_button, continue_button, more_info_text
+    for i in file_buttons:
+        destroy(i)
+    
+    destroy(createworld_button)
+    destroy(worldseedinput)
+    destroy(returntomenu_button)
+    destroy(mode_select_button)
+    destroy(world_dimensions_button)
+    destroy(world_depth_button)
+    outdated_version_text = Text(
+    parent=camera.ui,
+    font="PyCraft/Textures/Fonts/mc.ttf",
+    text=f'This world was created on an older version of PyCraft. Continue?',   
+    origin=(0, 0),      
+    scale=1.3,            
+    color=color.white,   
+    position=(0, 0.1),            
+    )
+    more_info_text = Text(
+    parent=camera.ui,
+    font="PyCraft/Textures/Fonts/mc.ttf",
+    text=f'(World Version: {worldversion}, Game Version: {game_version})',   
+    origin=(0, 0),      
+    scale=0.8,            
+    color=color.white,   
+    position=(0, 0.07),            
+    )
+    goback_button = Button(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf",
+        text='Back',
+        color=color.light_gray,
+        scale=(0.225, 0.05),
+        texture="PyCraft/Textures/buttontexture.png",
+        highlight_color=color.rgb(0.745, 0.729, 1),
+        position=(-0.1375, 0),  
+        on_click = lambda: destroy_outdated()
+    )
+    continue_button = Button(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf",
+        text='Continue',
+        color=color.light_gray,
+        scale=(0.225, 0.05),
+        texture="PyCraft/Textures/buttontexture.png",
+        highlight_color=color.rgb(0.745, 0.729, 1),
+        position=(0.1375, 0),  
+        on_click = lambda: destroy_outdated(True, filename)
+    )
+def destroy_outdated(continued=False, filename=None):
+    destroy(continue_button)
+    destroy(goback_button)
+    destroy(outdated_version_text)
+    destroy(more_info_text)
+    if continued:
+        load_world(filename, True)
+    else:
+        open_play_menu()
 def toggle_inventory():
     global inventory_opened
     if creative:
@@ -2120,7 +2337,7 @@ def toggle_inventory():
             open_survival_inventory()
 
 def open_survival_inventory():
-    global inventory_opened, survival_inventory_panel, cs1, cs2, cs3, cs4, result_slot, crafting_slots
+    global inventory_opened, survival_inventory_panel, cs1, cs2, cs3, cs4, result_slot, craftingslots, cs1amount, cs2amount, cs3amount, cs4amount, rsamount, right_click_function_buttons
     inventory_opened = True
     mouse.locked = False
     mouse.visible = True
@@ -2134,59 +2351,204 @@ def open_survival_inventory():
         position = (0,0,1)
     )
     cs1 = Button( 
-                    color=color.hsv(0, 0, .9),
-                    texture=None,
-                    parent=survival_inventory_panel,
+                    color=color.hsv(0, 0, 0.9),
                     position=(0.1, 0.344, -1), 
+                    parent=survival_inventory_panel,
                     scale=(0.09, 0.1),
-                    hand_color = color.hsv(0, 0, .9),
-                    visible = True
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs1),
+                    visible=False,
+                    gridslot=0,
+                    amount = 0,
+                    equipped=False
                     )
+    cs1amount = Text(
+        parent=survival_inventory_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs1.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(0.125, 0.315, -2),
+        visible=True           
+    )
     cs2 = Button( 
-                    color=color.hsv(0, 0, .9),
-                    texture=None,
-                    parent=survival_inventory_panel,
+                    color=color.hsv(0, 0, 0.9),
                     position=(0.2035, 0.344, -1), 
+                    parent=survival_inventory_panel,
                     scale=(0.09, 0.1),
-                    hand_color = color.hsv(0, 0, .9),
-                    visible = True
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs2),
+                    visible=False,
+                    gridslot=1,
+                    amount = 0,
+                    equipped=False
                     )
+    cs2amount = Text(
+        parent=survival_inventory_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs2.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(0.225, 0.315, -2),
+        visible=True           
+    )
     cs3 = Button( 
-                    color=color.hsv(0, 0, .9),
-                    texture=None,
-                    parent=survival_inventory_panel,
+                    color=color.hsv(0, 0, 0.9),
                     position=(0.1, 0.238, -1), 
+                    parent=survival_inventory_panel,
                     scale=(0.09, 0.1),
-                    hand_color = color.hsv(0, 0, .9),
-                    visible = True
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs3),
+                    visible=False,
+                    gridslot=3,
+                    amount = 0,
+                    equipped=False
                     )
+    cs3amount = Text(
+        parent=survival_inventory_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs3.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(0.125, 0.21, -2),
+        visible=True           
+    )
     cs4 = Button( 
-                    color=color.hsv(0, 0, .9),
-                    texture=None,
-                    parent=survival_inventory_panel,
+                    color=color.hsv(0, 0, 0.9),
                     position=(0.2035, 0.238, -1), 
-                    scale=(0.09, 0.1),
-                    hand_color = color.hsv(0, 0, .9),
-                    visible = True
-                    ) 
-    result_slot = Button( 
-                    color=color.hsv(0, 0, .9),
-                    texture=None,
                     parent=survival_inventory_panel,
-                    position=(0.42, 0.283, -1), 
                     scale=(0.09, 0.1),
-                    hand_color = color.hsv(0, 0, .9),
-                    visible = True
-                    ) 
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs4),
+                    visible=False,
+                    gridslot=4,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs4amount = Text(
+        parent=survival_inventory_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs4.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(0.225, 0.21, -2),
+        visible=True           
+    )
+    craftingslots = [cs1,cs2,cs3,cs4]
+    for i in craftingslots:
+        right_click_function_buttons.append(i)
+    result_slot = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(0.42, 0.283, -1), 
+                    parent=survival_inventory_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: take_result_item(result_slot),
+                    visible=False,
+                    amount = 0,
+                    equipped=False
+                    )
+    rsamount = Text(
+        parent=survival_inventory_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(result_slot.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(0.44, 0.255, -2),
+        visible=True           
+    )
     
 def close_survival_inventory():
-    global inventory_opened
+    global inventory_opened, holding_block, right_click_function_buttons
     inventory_opened = False
     mouse.locked = True
     mouse.visible = False
+    if holding_block:
+        holding_block = False
+        destroy(block_drag)
+        destroy(block_drag_amount)
+    for i in craftingslots:
+        right_click_function_buttons.remove(i)
     destroy(survival_inventory_panel)
 
 
+def add_item_to_crafting_slot(cs):
+    global crafting_grid, result_slot
+    if holding_block:
+        equip_block(cs)
+    else:
+        swap_block(cs)
+
+
+    for i in craftingslots:
+        crafting_grid[i.gridslot] = i.equipped.__name__ if i.equipped else None
+    print(crafting_grid)
+    crafting_tuple = tuple(crafting_grid)
+    print(crafting_tuple)
+    if crafting_tuple in crafting_recipes:
+        print('recipe found!')
+        result_slot.texture = crafting_recipes[crafting_tuple][0].block_icon
+        result_slot.visible = True
+        result_slot.equipped = crafting_recipes[crafting_tuple][0]
+        result_slot.hand_color = crafting_recipes[crafting_tuple][0].block_color
+        result_slot.amount = crafting_recipes[crafting_tuple][1]
+    else:
+        result_slot.texture = None
+        result_slot.equipped = False
+        result_slot.visible = False
+        result_slot.amount = 0
+
+def take_result_item(s):
+    global crafting_grid, block_drag, block_drag_amount
+    if holding_block and block_held != result_slot.equipped:
+        return
+    elif holding_block and block_held == result_slot.equipped and (block_drag.amount + result_slot.amount) <= 64:
+        for i in craftingslots:
+            if i.amount > 1:
+                i.amount -= 1
+            else:
+                i.equipped = None
+                i.visible = False
+                i.texture = None
+                i.amount = 0
+                i.hand_color = color.hsv(30, 0.4, 0.8)
+        block_drag.amount += result_slot.amount
+        block_drag_amount.text = block_drag.amount
+    elif holding_block and block_held == result_slot.equipped and (block_drag.amount + result_slot.amount) > 64:
+        return
+    else:
+        if result_slot.equipped:
+            for i in craftingslots:
+                if i.amount > 1:
+                    i.amount -= 1
+                else:
+                    i.equipped = None
+                    i.visible = False
+                    i.texture = None
+                    i.amount = 0
+                    i.hand_color = color.hsv(30, 0.4, 0.8)
+        swap_block(s, True)
+    for i in craftingslots:
+        crafting_grid[i.gridslot] = i.equipped.__name__ if i.equipped else None
+    crafting_tuple = tuple(crafting_grid)
+    print(crafting_tuple)
+    if crafting_tuple in crafting_recipes:
+        print('recipe found!')
+        result_slot.texture = crafting_recipes[crafting_tuple][0].block_icon
+        result_slot.visible = True
+        result_slot.equipped = crafting_recipes[crafting_tuple][0]
+        result_slot.hand_color = crafting_recipes[crafting_tuple][0].block_color
+        result_slot.amount = crafting_recipes[crafting_tuple][1]
+    else:
+        result_slot.texture = None
+        result_slot.equipped = False
+        result_slot.visible = False
+        result_slot.amount = 0
 
 
 def open_inventory(pg, pgn, pgl):
@@ -2289,63 +2651,151 @@ def previous_inventory_page():
         currentpagedata['pagenumber'] = page_number.text
         currentpagedata['pagelabel'] = pagelabels[page_number.text]
 def hold_block(block):
-    global selectedvoxel,selected,hand,defrot,holding_block,block_drag,block_held
+    global selectedvoxel,selected,hand,defrot,holding_block,block_drag,block_held, block_drag_amount
     if holding_block:
         destroy(block_drag)
+        destroy(block_drag_amount)
     holding_block = True
     block_drag = Entity(
             parent=camera.ui,
             model='quad',
             texture=block['texture'],
             blockcolor = block['color'],
+            amount = 1,
             scale=(0.05,0.05),
             color=color.white,
         )
+    block_drag_amount = Text(
+        parent=camera.ui,
+        font="PyCraft/Textures/Fonts/mc.ttf",
+        text=str(block_drag.amount),
+        origin=(0, 0),
+        scale=1,
+        color=color.white,
+        )
     block_held = block['voxel_class']
 def equip_block(slot):
-    global selectedvoxel,selected,hand,defrot,holding_block,block_drag,block_held,slot1,slot2,slot3,slot4,slot5,slot6,slot7,slot8,slot9, replacingslot
+    global selectedvoxel,selected,hand,defrot,holding_block,block_drag,block_held,slot1,slot2,slot3,slot4,slot5,slot6,slot7,slot8,slot9, replacingslot, block_drag_amount
     if holding_block and not replacingslot:
         slot.texture=block_drag.texture
+        if slot.equipped == block_held:
+            if slot.amount < 64 and (slot.amount + block_drag.amount) <= 64:
+                slot.amount += block_drag.amount
+            elif slot.amount < 64 and (slot.amount + block_drag.amount) > 64:
+                block_drag.amount = (slot.amount + block_drag.amount) - 64
+                slot.amount = 64
+                block_drag_amount.text = block_drag.amount
+                return
+        else:
+            slot.amount = block_drag.amount
         slot.equipped=block_held
         slot.hand_color=block_drag.blockcolor
         slot.visible = True
+
         destroy(block_drag)
+        destroy(block_drag_amount)
         holding_block = False
         if slot == slotselected:
             update_equipped_slot(slot)
     if holding_block and replacingslot:
-        replacingslot.texture = slot.texture
-        replacingslot.equipped = slot.equipped
-        replacingslot.hand_color = slot.hand_color
-        replacingslot.visible = slot.visible
-        slot.texture=block_drag.texture
-        slot.equipped=block_held
-        slot.hand_color=block_drag.blockcolor
-        slot.visible = True
+        if slot.equipped == block_held and slot.amount < 64 and (slot.amount + block_drag.amount) <= 64:
+            slot.amount += block_drag.amount
+            replacingslot.texture = None
+            replacingslot.equipped = None
+            replacingslot.hand_color = color.hsv(30, 0.4, 0.8)
+            replacingslot.amount = 0
+        else:
+            replacingslot.texture = slot.texture
+            replacingslot.equipped = slot.equipped
+            replacingslot.hand_color = slot.hand_color
+            replacingslot.visible = slot.visible
+            replacingslot.amount = slot.amount
+            slot.texture=block_drag.texture
+            slot.equipped=block_held
+            slot.hand_color=block_drag.blockcolor
+            slot.amount = block_drag.amount if hasattr(block_drag, 'amount') else 1
+            slot.visible = True
         destroy(block_drag)
+        destroy(block_drag_amount)
         if slot == slotselected or replacingslot == slotselected:
             update_equipped_slot(slotselected)
         replacingslot = False
         holding_block = False
 
-def swap_block(slot):
-    global selectedvoxel,selected,hand,defrot,holding_block,block_drag,block_held,slot1,slot2,slot3,slot4,slot5,slot6,slot7,slot8,slot9, replacingslot
+def right_click_equip(slot):
+    global block_drag, block_drag_amount, holding_block, crafting_grid
 
-    block_drag = Entity(
+    print(slot)
+    if slot.equipped == block_held and (slot.amount + 1) <= 64:
+        slot.amount += 1
+        if (block_drag.amount - 1) < 1:
+            destroy(block_drag)
+            destroy(block_drag_amount)
+            holding_block = False
+        else:
+            block_drag.amount -= 1
+            block_drag_amount.text = block_drag.amount
+    elif slot.equipped == block_held and (slot.amount + 1) > 64:
+        return
+    elif not slot.equipped:
+        slot.visible = True
+        slot.texture = block_drag.texture
+        slot.amount += 1
+        slot.hand_color = block_drag.blockcolor
+        slot.equipped = block_held
+        if (block_drag.amount - 1) < 1:
+            destroy(block_drag)
+            destroy(block_drag_amount)
+            holding_block = False
+        else:
+            block_drag.amount -= 1
+            block_drag_amount.text = block_drag.amount
+    if (not creative and inventory_opened) or crafting_menu_open:
+        for i in craftingslots:
+            crafting_grid[i.gridslot] = i.equipped.__name__ if i.equipped else None
+        crafting_tuple = tuple(crafting_grid)
+        print(crafting_tuple)
+        if crafting_tuple in crafting_recipes:
+            print('recipe found!')
+            result_slot.texture = crafting_recipes[crafting_tuple][0].block_icon
+            result_slot.visible = True
+            result_slot.equipped = crafting_recipes[crafting_tuple][0]
+            result_slot.hand_color = crafting_recipes[crafting_tuple][0].block_color
+            result_slot.amount = crafting_recipes[crafting_tuple][1]
+        else:
+            result_slot.texture = None
+            result_slot.equipped = False
+            result_slot.visible = False
+            result_slot.amount = 0
+def swap_block(slot, craftingresult=False):
+    global selectedvoxel,selected,hand,defrot,holding_block,block_drag,block_held,slot1,slot2,slot3,slot4,slot5,slot6,slot7,slot8,slot9, replacingslot, block_drag_amount
+    if slot.equipped:
+        block_drag = Entity(
+            parent=camera.ui,
+            model='quad',
+            texture=slot.texture,
+            blockcolor = slot.hand_color,
+            scale=(0.05,0.05),
+            amount=slot.amount,
+            color=color.white,
+        )
+        block_drag_amount = Text(
         parent=camera.ui,
-        model='quad',
-        texture=slot.texture,
-        blockcolor = slot.hand_color,
-        scale=(0.05,0.05),
+        font="PyCraft/Textures/Fonts/mc.ttf",
+        text=str(block_drag.amount),
+        origin=(0, 0),
+        scale=1,
         color=color.white,
-    )
-    replacingslot = slot
-    slot.visible = False
-    block_held = slot.equipped
-    holding_block = True
-    slot.equipped = None
-    if slot == slotselected:
-        update_equipped_slot(slot)
+        )
+        slot.amount = 0
+        if not craftingresult:
+            replacingslot = slot
+        slot.visible = False
+        block_held = slot.equipped
+        holding_block = True
+        slot.equipped = None
+        if slot == slotselected:
+            update_equipped_slot(slot)
 def close_inventory():
     global inventory_opened, inventory_panel, block_buttons, holding_block
     inventory_opened = False
@@ -2354,6 +2804,7 @@ def close_inventory():
     if holding_block:
         holding_block = False
         destroy(block_drag)
+        destroy(block_drag_amount)
     destroy(inventory_panel)
     for btn in block_buttons:
         destroy(btn)
@@ -2513,6 +2964,255 @@ def destroy_death_screen():
     player.position = Vec3(*[0,0,0])
     update_equipped_slot(slot1)
 
+crafting_menu_open = False
+
+def build_crafting_table_menu():
+    global crafting_menu_open, crafting_panel, result_slot, cs1, cs2, cs3, cs4, cs5, cs6, cs7, cs8, cs9, cs1amount, cs2amount, cs3amount, cs4amount, cs5amount, cs6amount, cs7amount, cs8amount, cs9amount, rsamount, craftingslots
+    mouse.locked = False
+    crafting_menu_open = True
+    crafting_panel = Entity(
+        parent=camera.ui,
+        model='quad',
+        texture = 'PyCraft/Textures/craftinggui.png',
+        scale=(0.5,0.45),
+        color=color.hsv(0,0,0.9),
+        position = (0,0,1)
+    )
+    cs1 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.285, 0.35, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs1),
+                    visible=False,
+                    gridslot=0,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs1amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs1.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.26, 0.32, -2),
+        visible=True           
+    )
+    cs2 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.185, 0.35, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs2),
+                    visible=False,
+                    gridslot=1,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs2amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs2.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.16, 0.32, -2),
+        visible=True           
+    )
+    cs3 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.083, 0.35, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs3),
+                    visible=False,
+                    gridslot=2,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs3amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs3.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.058, 0.32, -2),
+        visible=True           
+    )
+    cs4 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.285, 0.24, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs4),
+                    visible=False,
+                    gridslot=3,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs4amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs4.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.26, 0.21, -2),
+        visible=True           
+    )
+    cs5 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.185, 0.24, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs5),
+                    visible=False,
+                    gridslot=4,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs5amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs5.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.16, 0.21, -2),
+        visible=True           
+    )
+    cs6 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.083, 0.24, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs6),
+                    visible=False,
+                    gridslot=5,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs6amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs1.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.058, 0.21, -2),
+        visible=True           
+    )
+    cs7 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.285, 0.133, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs7),
+                    visible=False,
+                    gridslot=6,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs7amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs7.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.26, 0.105, -2),
+        visible=True           
+    )
+    cs8 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.185, 0.133, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs8),
+                    visible=False,
+                    gridslot=7,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs8amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs8.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.16, 0.105, -2),
+        visible=True           
+    )
+    cs9 = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(-0.083, 0.133, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: add_item_to_crafting_slot(cs9),
+                    visible=False,
+                    gridslot=8,
+                    amount = 0,
+                    equipped=False
+                    )
+    cs9amount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(cs9.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(-0.058, 0.105, -2),
+        visible=True           
+    )
+    craftingslots = [cs1,cs2,cs3,cs4,cs5,cs6,cs7,cs8,cs9]
+    for i in craftingslots:
+        right_click_function_buttons.append(i)
+    result_slot = Button( 
+                    color=color.hsv(0, 0, 0.9),
+                    position=(0.25, 0.24, -1), 
+                    parent=crafting_panel,
+                    scale=(0.09, 0.1),
+                    hand_color = color.hsv(30, 0.4, 0.8),
+                    on_click = lambda: take_result_item(result_slot),
+                    visible=False,
+                    amount = 0,
+                    equipped=False
+                    )
+    rsamount = Text(
+        parent=crafting_panel,
+        font="PyCraft/Textures/Fonts/mc.ttf", 
+        text=str(result_slot.amount),   
+        origin=(0, 0),      
+        scale=2.25,            
+        color=color.white,   
+        position=(0.27, 0.21, -2),
+        visible=True           
+    )
+
+def destroy_crafting_table_menu():
+    global crafting_menu_open, holding_block
+    destroy(crafting_panel)
+    mouse.locked = True
+    crafting_menu_open = False
+    for i in craftingslots:
+        right_click_function_buttons.remove(i)
+    if holding_block:
+        holding_block = False
+        destroy(block_drag)
+        destroy(block_drag_amount)
+
 mining_animation_running = False
 mining_speed = 0.1
 original_hand_rotation = (90,0,0)
@@ -2536,11 +3236,13 @@ selectedvoxel = Voxel
 selected = ''
 def input(key):
     global selectedvoxel, selector, hand, defrot, selected, world_data, blockcopied, slotselected, currently_breaking_block, block_break_start_time, mouse_held
-    if key == 'escape' and not main_menu_open and not inventory_opened:
+    if key == 'escape' and not main_menu_open and not inventory_opened and not crafting_menu_open:
             toggle_mouse_lock()
-    if key == 'e' and not main_menu_open and not pause_menu_open:
+    if key == 'e' and not main_menu_open and not pause_menu_open and not crafting_menu_open:
         toggle_inventory()
         return
+    if key == 'escape' and crafting_menu_open or key == 'e' and crafting_menu_open:
+        destroy_crafting_table_menu()
     if mouse.locked:
         if creative:
             if key == 'left mouse down':
@@ -2611,7 +3313,7 @@ def input(key):
             blocktexture =mouse.hovered_entity.texture
             blockicon = mouse.hovered_entity.block_icon
             blockmodel = mouse.hovered_entity.block_model
-            
+            slotselected.amount = 1
             slotselected.hand_color = voxcolor
             slotselected.texture = blockicon
             slotselected.equipped = block_class_mapping[mouse.hovered_entity.__class__.__name__]
@@ -2622,6 +3324,9 @@ def input(key):
             update_hand_properties(hand, model=blockmodel, texture=blocktexture, color=color.rgb(voxcolor.r, voxcolor.g, voxcolor.b), scale=(0.5,0.5,0.5) if blockmodel == 'cube' else (0.25, 0.25, 0.25), origin_y=0 if blockmodel == 'cube' else 1, rotation=(0,0,0), position=(0,0,0))
         if key == 'right mouse down':
             hit_info = raycast(camera.world_position, camera.forward, distance=7, ignore=(player,))
+            if hit_info.hit and f"{hit_info.entity}" == "crafting_table_voxel" and not held_keys['left control']:
+                build_crafting_table_menu()
+                return
             if hit_info.hit and selectedvoxel and not hasattr(hit_info.entity, 'wall') and not hasattr(selectedvoxel, 'istool'):
                 new_position = hit_info.entity.position + hit_info.normal
                 if selectedvoxel == FlintAndSteel:
@@ -2631,6 +3336,8 @@ def input(key):
                 if block_type == 'CopiedVoxel':
                     block_type = blockcopied
                 world_data.append({'position': [new_position.x, new_position.y, new_position.z], 'block_type': block_type})
+                if not creative:
+                    slotselected.amount -= 1
                 hand.rotation = defrot
 
                 hand.animate_rotation((110, -30, 0), duration=0.2, curve=curve.in_out_quad)
@@ -2958,9 +3665,8 @@ def input(key):
                 visible=True
                 )
         if key == 'q':
-            slotselected.equipped = None
-            slotselected.visible = False
-            update_equipped_slot(slotselected)
+            if slotselected.amount > 0:
+                slotselected.amount -= 1
 
 
 issprinting = False
@@ -2975,7 +3681,7 @@ def flash_vignette():
 
 class CustomFirstPersonController(Entity):
     def __init__(self, **kwargs):
-        self.cursor = Entity(parent=camera.ui, model='quad', color=color.pink, scale=.008, rotation_z=45)
+        self.cursor = Entity(parent=camera.ui, model='quad', texture="PyCraft/Textures/cursor.png", color=color.white, scale=.03)
         super().__init__()
         self.speed = 5
         self.height = 2
@@ -3117,6 +3823,18 @@ fall_start_y = None
 is_falling = False
 health = 100
 
+def update_hearts():
+    num_full_hearts = int(health / 10)
+    remainder = health % 10
+
+    for i in range(10):
+        if i < num_full_hearts:
+            hearts[::-1][i].texture = 'PyCraft/Textures/fullheart.png'
+        elif i == num_full_hearts and remainder >= 5:
+            hearts[::-1][i].texture = 'PyCraft/Textures/halfheart.png'
+        else:
+            hearts[::-1][i].texture = 'PyCraft/Textures/emptyheart.png'
+
 def animatehand():
     hand.rotation = defrot
 
@@ -3124,12 +3842,55 @@ def animatehand():
                             
     invoke(hand.animate_rotation, defrot, duration=0.2, curve=curve.in_out_quad, delay=0.2)
 
+right_click_held = False
 def update():
-    global fov_slider, issprinting, iscrouching, paused, last_y_position, fall_start_y, health, is_falling, light_to_dark, currently_breaking_block, block_break_start_time, mouse_held, overlay_entity, mining_animation_running, coordslabel, tiptext, title_screen_open
+    global fov_slider, issprinting, iscrouching, paused, last_y_position, fall_start_y, health, is_falling, light_to_dark, currently_breaking_block, block_break_start_time, mouse_held, overlay_entity, mining_animation_running, coordslabel, tiptext, title_screen_open, slot1amount, crafting_grid, right_click_held
     if paused:
         player.enabled = False
         return
     current_y = player.position.y
+    if not main_menu_open:
+        slot1amount.text = slot1.amount
+        slot2amount.text = slot2.amount
+        slot3amount.text = slot3.amount
+        slot4amount.text = slot4.amount
+        slot5amount.text = slot5.amount
+        slot6amount.text = slot6.amount
+        slot7amount.text = slot7.amount
+        slot8amount.text = slot8.amount
+        slot9amount.text = slot9.amount
+        if slotselected.amount < 1:
+            slotselected.amount = 0
+            slotselected.visible = False
+            slotselected.equipped = None
+            update_equipped_slot(slotselected)
+    if not creative and inventory_opened:
+        for i in craftingslots:
+            crafting_grid[i.gridslot] = i.equipped.__name__ if i.equipped else None
+        cs1amount.text = cs1.amount
+        cs2amount.text = cs2.amount
+        cs3amount.text = cs3.amount
+        cs4amount.text = cs4.amount
+        rsamount.text = result_slot.amount
+    if crafting_menu_open:
+        cs1amount.text = cs1.amount
+        cs2amount.text = cs2.amount
+        cs3amount.text = cs3.amount
+        cs4amount.text = cs4.amount
+        cs5amount.text = cs5.amount
+        cs6amount.text = cs6.amount
+        cs7amount.text = cs7.amount
+        cs8amount.text = cs8.amount
+        cs9amount.text = cs9.amount
+        rsamount.text = result_slot.amount
+    if not main_menu_open:
+        for i in right_click_function_buttons:
+            if i.hovered and mouse.right and not right_click_held:
+                if holding_block:
+                    right_click_equip(i)
+                right_click_held = True
+            elif not mouse.right:
+                right_click_held = False
     if not creative:
         if last_y_position is not None:
             if current_y < last_y_position:
@@ -3166,7 +3927,8 @@ def update():
     if title_screen_open:
         tiptext.scale = 1.5 + math.sin(time.time() * 2) * 0.1
     if holding_block:
-        block_drag.position = Vec3(mouse.x, mouse.y, -1.1)
+        block_drag.position = Vec3(mouse.x, mouse.y, -2.1)
+        block_drag_amount.position = Vec3(mouse.x + 0.01, mouse.y - 0.01, -2.2)
     if held_keys['shift']:
         player.speed = 10
         if not issprinting:

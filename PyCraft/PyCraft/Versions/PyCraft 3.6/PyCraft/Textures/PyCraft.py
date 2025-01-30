@@ -21,16 +21,11 @@ script_dir = Path(__file__).parent
 print(f'The relative path is {script_dir}')
 current_datetime = datetime.now()
 app = Ursina(borderless=False, title='PyCraft', icon='PyCraft/pycraftlogo.ico')
-Entity.default_shader = lit_with_shadows_shader
-sun = DirectionalLight(parent=scene, y=10, z=10, shadows=True)
-sun.look_at(Vec3(0,0,0))
-
-game_version = '3.2'
+game_version = '3.0'
 world_data = []
 hearts = []
 hungers = []
 debugOpen = False
-cinematicMode = False
 window.fullscreen = False
 seedvalue = None
 fov_slider = None
@@ -43,7 +38,7 @@ block_class_mapping = {}
 paused = False
 spawnpoint = Vec3(*[0,0,0])
 isanimating = False
-
+worldgenerated = False
 Text.default_font = "PyCraft/Textures/Fonts/mc.ttf"
 vignette = Entity(
         parent=camera.ui,
@@ -76,34 +71,6 @@ class Cloud(Entity):
 
 
 
-# Gun class definition
-class Gun(Entity):
-    def __init__(self, **kwargs):
-        super().__init__(model="cube", color=color.black, scale=(0.2, 0.05, 0.05), position=(0.5, -0.3, 0))  # Gun model
-        self.parent = camera  # Attach the gun to the camera
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-    def shoot(self):
-        self.shooting_sound.play()  # Play the shooting sound
-        hit_info = raycast(camera.world_position, camera.forward, distance=10)
-        if hit_info.hit:
-            print(f"Hit: {hit_info.entity}")
-            if hasattr(hit_info.entity, 'destroy'):
-                hit_info.entity.destroy()
-
-# Initialize the gun
-gun = Gun()
-
-# Handle input for shooting
-def input(key):
-    if key == 'left mouse down':  # Trigger shooting when left mouse button is pressed
-        gun.shoot()  # Call the shoot function when left-click is pressed
-
-# Your other game logic here...
-
-
-
 # Voxel Classes
 # -------------
 
@@ -121,7 +88,7 @@ class Voxel(Button):
             texture='PyCraft/Textures/cobblestone.png',
             color=base_color,
             blockclass='stone',
-            isblock = True,
+            isblock = True
         )
         r = min(base_color.r + 0.1, 1.0)
         g = min(base_color.g + 0.1, 1.0)
@@ -190,27 +157,6 @@ class OakPlanksVoxel(Button):
         b = min(base_color.b + 0.1, 1.0)
         self.highlight_color = color.rgb(r, g, b)
 block_class_mapping['OakPlanksVoxel'] = OakPlanksVoxel
-class OakSlabVoxel(Button):
-    block_texture='PyCraft/Textures/oak_planks.png'
-    block_icon = 'PyCraft/Textures/oakplanksblock.png'
-    block_color = color.hsv(0, 0, .9)
-    block_model = 'cube'
-    def __init__(self, position=(0,0,0)):
-        base_color = color.hsv(0, 0, .9)
-        super().__init__(parent=scene,
-            position=position,
-            model='cube',
-            origin_y=.5,
-            texture='PyCraft/Textures/oak_planks.png',
-            color=base_color,
-            scale = (1,0.5,1),
-            isblock = True
-        )
-        r = min(base_color.r + 0.1, 1.0)
-        g = min(base_color.g + 0.1, 1.0)
-        b = min(base_color.b + 0.1, 1.0)
-        self.highlight_color = color.rgb(r, g, b)
-block_class_mapping['OakSlabVoxel'] = OakSlabVoxel
 class OakLogVoxel(Button):
     block_texture='PyCraft/Textures/oaklogatlas.png'
     block_icon = 'PyCraft/Textures/oaklogblock.png'
@@ -427,46 +373,6 @@ class RedWoolVoxel(Button):
         b = min(base_color.b + 0.1, 1.0)
         self.highlight_color = color.rgb(r, g, b)
 block_class_mapping['RedWoolVoxel'] = RedWoolVoxel
-class DiamondBlock(Button):
-    block_texture='PyCraft/Textures/diamondblock.png'
-    block_icon = 'PyCraft/Textures/diamondblockicon.png'
-    block_color = color.hsv(0, 0, .9)
-    block_model = 'cube'
-    def __init__(self, position=(0,0,0)):
-        base_color = color.hsv(0, 0, .9)
-        super().__init__(parent=scene,
-            position=position,
-            model='cube',
-            origin_y=.5,
-            texture='PyCraft/Textures/diamondblock.png',
-            color=base_color,
-            isblock = True
-        )
-        r = min(base_color.r + 0.1, 1.0)
-        g = min(base_color.g + 0.1, 1.0)
-        b = min(base_color.b + 0.1, 1.0)
-        self.highlight_color = color.rgb(r, g, b)
-block_class_mapping['DiamondBlock'] = DiamondBlock
-class SlimeVoxel(Button):
-    block_texture='PyCraft/Textures/slime.png'
-    block_icon = 'PyCraft/Textures/slimeblock.png'
-    block_color = color.hsv(0, 0, .9)
-    block_model = 'cube'
-    def __init__(self, position=(0,0,0)):
-        base_color = color.hsv(0, 0, .9)
-        super().__init__(parent=scene,
-            position=position,
-            model='cube',
-            origin_y=.5,
-            texture='PyCraft/Textures/slime.png',
-            color=base_color,
-            isblock = True
-        )
-        r = min(base_color.r + 0.1, 1.0)
-        g = min(base_color.g + 0.1, 1.0)
-        b = min(base_color.b + 0.1, 1.0)
-        self.highlight_color = color.rgb(r, g, b)
-block_class_mapping['SlimeVoxel'] = SlimeVoxel
 class SandVoxel(Button):
     block_texture='PyCraft/Textures/sand.png'
     block_icon = 'PyCraft/Textures/sandblock.png'
@@ -802,6 +708,27 @@ class Cow(Entity):
         if not self.grounded:
             self.position -= Vec3(0, self.gravity * time.dt, 0)
 
+# ----
+
+class Chunk:
+    def __init__(self, position, size=16):
+        self.position = position
+        self.size = size
+        self.blocks = {}
+    
+    def add_block(self, position, block_type):
+        if position not in self.blocks:
+            self.blocks[position] = block_type
+
+    def generate(self, noise, seed):
+        for x in range(self.size):
+            for z in range(self.size):
+                world_x = self.position[0] * self.size + x
+                world_z = self.position[1] * self.size + z
+                surface_y = math.floor(noise([world_x * 0.02, world_z * 0.02]) * 7.5)
+                for y in range(-2, surface_y + 1):
+                    self.add_block((world_x, y, world_z), 'GroundVoxel')
+
 
 worldgenerationvoxels = {
     'surfacevoxel': GroundVoxel,
@@ -891,9 +818,6 @@ inventory_blocks_pg4 = [
     {'voxel_class': CraftingTableVoxel, 'texture': CraftingTableVoxel.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Crafting Table'},
     {'voxel_class': SandVoxel, 'texture': SandVoxel.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Sand'},
     {'voxel_class': GravelVoxel, 'texture': GravelVoxel.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Gravel'},
-    {'voxel_class': SlimeVoxel, 'texture': SlimeVoxel.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Slime'},
-    {'voxel_class': DiamondBlock, 'texture': DiamondBlock.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'DiamondBlock'},
-    {'voxel_class': OakSlabVoxel, 'texture': OakSlabVoxel.block_icon, 'color': color.hsv(0,0,0.9), 'name': 'Oak Slab'},
 ]
 
 pages = {
@@ -1018,9 +942,136 @@ mods_folder = f'{script_dir}\PyCraft\mods'
 mod_states = load_mod_states(mods_folder)
 
 
+chunks = {}
+chunk_size = 1
+render_distance = 5
 
-def generate_world(worldseed, worldsize, worlddepth):
-    global worlddimensions, min_y, seedvalue, worldver, inventory_blocks_pg1, inventory_blocks_pg2
+def get_chunk_coords(position):
+    return (position.x // chunk_size, position.z // chunk_size)
+
+def generate_initial_chunks():
+    player_chunk_coords = get_chunk_coords(player.position)
+    chunks_to_generate = [
+        (player_chunk_coords[0] + x, player_chunk_coords[1] + z)
+        for x in range(-render_distance, render_distance + 1)
+        for z in range(-render_distance, render_distance + 1)
+    ]
+
+    for i, chunk_coords in enumerate(chunks_to_generate):
+        invoke(generate_chunk, chunk_coords, noise, delay=i * 0.05)
+
+def generate_tree(chunk, x, y, z):
+    # Generate a simple tree
+    tree_height = 3  # Main trunk height
+    leaves_positions = [
+        (x, y + 3, z + 1), (x + 1, y + 3, z + 1), (x - 1, y + 3, z + 1),
+        (x, y + 3, z - 1), (x + 1, y + 3, z - 1), (x - 1, y + 3, z - 1),
+        (x + 1, y + 3, z), (x - 1, y + 3, z), (x, y + 4, z + 1),
+        (x + 1, y + 4, z + 1), (x - 1, y + 4, z + 1), (x, y + 4, z - 1),
+        (x + 1, y + 4, z - 1), (x - 1, y + 4, z - 1), (x + 1, y + 4, z),
+        (x - 1, y + 4, z), (x, y + 5, z)
+    ]
+
+    for i in range(tree_height):
+        chunk.add_block((x, y + 1 + i, z), 'OakLogVoxel')
+
+    for pos in leaves_positions:
+        chunk.add_block(pos, 'TreeLeavesVoxel')
+
+
+def generate_chunk(chunk_coords, noise):
+    if chunk_coords in chunks:
+        return
+
+    chunk = Chunk(chunk_coords, chunk_size)
+    chunks[chunk_coords] = chunk
+
+    for x in range(chunk_size):
+        for z in range(chunk_size):
+            world_x = chunk_coords[0] * chunk_size + x
+            world_z = chunk_coords[1] * chunk_size + z
+            surface_y = math.floor(noise([world_x * 0.02, world_z * 0.02]) * 7.5)
+
+            for y in range(min_y, surface_y + 1):
+                position = (world_x, y, world_z)
+
+                # Ensure no duplicate blocks are added
+                if position in chunk.blocks:
+                    continue
+
+                if y == surface_y:
+                    chunk.add_block(position, 'GroundVoxel')
+                    ## if random.randint(0, 65) == 5:
+                    ##    generate_tree(chunk, world_x, surface_y, world_z)
+                elif y == min_y:
+                    chunk.add_block(position, 'Bedrock')
+                elif y > surface_y - 3:
+                    chunk.add_block(position, 'BrownVoxel')
+                else:
+                    oregenerator = random.randint(0, 20)
+                    if oregenerator == 5 and y < surface_y - 10:
+                        chunk.add_block(position, 'IronOreVoxel')
+                    elif oregenerator == 15:
+                        chunk.add_block(position, 'CoalOreVoxel')
+                    else:
+                        chunk.add_block(position, 'Voxel')
+
+    # Create entities for blocks in the chunk
+    for position, block_type in chunk.blocks.items():
+        block_class = block_class_mapping[block_type]
+        block_class(position=Vec3(*position))
+
+
+chunk_processing_queue = []
+chunk_unloading_queue = []
+def update_visible_chunks(player_position):
+    global chunk_processing_queue
+
+    player_chunk_coords = get_chunk_coords(player_position)
+    for x in range(-render_distance, render_distance + 1):
+        for z in range(-render_distance, render_distance + 1):
+            chunk_coords = (player_chunk_coords[0] + x, player_chunk_coords[1] + z)
+            if chunk_coords not in chunks and chunk_coords not in chunk_processing_queue:
+                chunk_processing_queue.append(chunk_coords)
+
+    chunks_to_remove = [
+        chunk_coords for chunk_coords in chunks
+        if abs(chunk_coords[0] - player_chunk_coords[0]) > render_distance
+        or abs(chunk_coords[1] - player_chunk_coords[1]) > render_distance
+    ]
+
+    for chunk_coords in chunks_to_remove:
+        if chunk_coords not in chunk_unloading_queue:
+            chunk_unloading_queue.append(chunk_coords)
+
+    process_chunks_in_queue()
+    process_chunk_unloading_queue()
+
+def process_chunks_in_queue(batch_size=5):
+    global chunk_processing_queue
+
+    for _ in range(min(batch_size, len(chunk_processing_queue))):
+        chunk_coords = chunk_processing_queue.pop(0)
+        generate_chunk(chunk_coords, noise)
+
+def process_chunk_unloading_queue(batch_size=5):
+    global chunk_unloading_queue
+
+    for _ in range(min(batch_size, len(chunk_unloading_queue))):
+        chunk_coords = chunk_unloading_queue.pop(0)
+
+        for position in chunks[chunk_coords].blocks.keys():
+            for entity in scene.entities:
+                if isinstance(entity, Button) and entity.position == Vec3(*position):
+                    destroy(entity)
+
+        del chunks[chunk_coords]
+
+
+def generate_world(worldseed):
+    global worlddimensions, min_y, seedvalue, worldver, inventory_blocks_pg1, inventory_blocks_pg2, noise, worldgenerated
+    worldgenerated = True
+    min_y = -4
     load_mods(mod_states, mods_folder, game_api)
     clear_world()
     worldver = game_version
@@ -1031,80 +1082,9 @@ def generate_world(worldseed, worldsize, worlddepth):
         worldseed = random.randint(1,1000000)
     noise = PerlinNoise (octaves=3, seed=worldseed)
     seedvalue = worldseed
-    min_y = -worlddepth
-    worlddimensions = worldsize #World dimensions are twice this number 
-    for z in range(-worlddimensions,worlddimensions):
-        for x in range(-worlddimensions,worlddimensions):
-            surface_y = noise([x * .02,z * .02])
-            surface_y = math.floor(surface_y*7.5)
-            for y in range(min_y, surface_y + 1):
-                position = (x, y, z)
-                if y == surface_y:
-                    voxel = worldgenerationvoxels['surfacevoxel'](position=position)
-                    block_type = (type(voxel).__name__)
-                    treegenerator = random.randint(0,65)
-                    if treegenerator == 5:
-                        voxel = OakLogVoxel(position=(x,y+1,z))
-                        world_data.append({'position': [x, y+1, z], 'block_type': 'OakLogVoxel'})
-                        voxel = OakLogVoxel(position=(x,y+2,z))
-                        world_data.append({'position': [x, y+2, z], 'block_type': 'OakLogVoxel'})
-                        voxel = OakLogVoxel(position=(x,y+3,z))
-                        world_data.append({'position': [x, y+3, z], 'block_type': 'OakLogVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+3,z+1))
-                        world_data.append({'position': [x, y+3, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+3,z+1))
-                        world_data.append({'position': [x+1, y+3, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+3,z+1))
-                        world_data.append({'position': [x-1, y+3, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+3,z-1))
-                        world_data.append({'position': [x, y+3, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+3,z-1))
-                        world_data.append({'position': [x+1, y+3, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+3,z-1))
-                        world_data.append({'position': [x-1, y+3, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+3,z))
-                        world_data.append({'position': [x+1, y+3, z], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+3,z))
-                        world_data.append({'position': [x-1, y+3, z], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+4,z+1))
-                        world_data.append({'position': [x, y+4, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+4,z+1))
-                        world_data.append({'position': [x+1, y+4, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+4,z+1))
-                        world_data.append({'position': [x-1, y+4, z+1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+4,z-1))
-                        world_data.append({'position': [x, y+4, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+4,z-1))
-                        world_data.append({'position': [x+1, y+4, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+4,z-1))
-                        world_data.append({'position': [x-1, y+4, z-1], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x+1,y+4,z))
-                        world_data.append({'position': [x+1, y+4, z], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x-1,y+4,z))
-                        world_data.append({'position': [x-1, y+4, z], 'block_type': 'TreeLeavesVoxel'})
-                        voxel = TreeLeavesVoxel(position=(x,y+5,z))
-                        world_data.append({'position': [x, y+5, z], 'block_type': 'TreeLeavesVoxel'})
-                elif y == min_y:
-                    voxel = worldgenerationvoxels['minvoxel'](position=position)
-                    block_type = (type(voxel).__name__)
-                elif y > surface_y - 3:
-                    voxel = worldgenerationvoxels['undersurfacevoxel'](position=position)
-                    block_type = (type(voxel).__name__)
-                else:
-                    oregenerator = random.randint(0,20)
-                    if oregenerator == 5 and y < surface_y - 10:
-                        voxel = IronOreVoxel(position=position)
-                        block_type = 'IronOreVoxel'
-                    elif oregenerator == 15:
-                        voxel = CoalOreVoxel(position=position)
-                        block_type = 'CoalOreVoxel'
-                    else:
-                        voxel = worldgenerationvoxels['deepvoxel'](position=position)
-                        block_type = (type(voxel).__name__)
-                world_data.append({'position': [x, y, z], 'block_type': block_type})
-    build_barriers(worlddimensions, min_y)
-    spawn_animals(10)
-    player.position = Vec3(*[0,0,0])
+    player.position = Vec3(*[0,50,0])
+    player_chunk_coords = get_chunk_coords(player.position)
+    generate_initial_chunks()
     destroy_play_menu()
     build_hotbar()
     update_equipped_slot(slot1)
@@ -1178,7 +1158,14 @@ def build_barriers(dimensions, miny):
     )
 
 
-
+hotbar = Entity(
+    parent=camera.ui,
+    model='quad',
+    texture = 'PyCraft/Textures/hotbar.png',
+    scale=(0.5, 0.055),
+    position=(0,-0.45,1),
+    visible=True  
+    )
 
 def build_hotbar():
     global hotbar, selector, slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8, slot9, slotselected, hearts, slots
@@ -1459,22 +1446,21 @@ def open_settings():
     global settings_label, back_button, fullscreen_button, settings_opened, fov_slider, gamemode_button, creative
     settings_opened = True
     destroy_pause_menu()
-    settings_label = Entity(
-    parent=pause_menu,
-    model='quad',
-    texture = 'PyCraft/Textures/settingslabel.png',
-    scale=(0.35, 0.15),
-    position=(0, 0.15, -1),
-    visible=True  
+    settings_label = Text(
+        parent=pause_menu,
+        font="PyCraft/Textures/Fonts/mc.ttf",  
+        text='Settings',   
+        origin=(0, 0),      
+        scale=2,            
+        color=color.white,   
+        position=(0, 0.1),            
     )   
     fullscreen_button = Button(
         parent=pause_menu,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Fullscreen: Disabled' if not window.fullscreen else 'Fullscreen: Enabled',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.2, 0.025),  # Size of the button
+        color=color.gray,
+        scale=(0.15, 0.02),  # Size of the button
         position=(0, 0),  # Position on the screen
         on_click = lambda: toggle_fullscreen()
     )
@@ -1483,10 +1469,8 @@ def open_settings():
         parent=pause_menu,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Gamemode: Survival' if not creative else 'Gamemode: Creative',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.2, 0.025),  # Size of the button
+        color=color.gray,
+        scale=(0.15, 0.02),  # Size of the button
         position=(0, -0.05),  # Position on the screen
         on_click = lambda: toggle_gamemode()
     )
@@ -1513,10 +1497,8 @@ def open_settings():
         parent=pause_menu,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Back',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.2, 0.025),  # Size of the button
+        color=color.gray,
+        scale=(0.15, 0.02),  # Size of the button
         position=(0, -0.1),  # Position on the screen
         on_click = lambda: close_settings()
     )
@@ -1581,11 +1563,9 @@ def build_pause_menu():
         parent=pause_menu,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Resume',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.2, 0.025),  # Size of the button
-        position=(0, 0, -1),  # Position on the screen
+        color=color.gray,
+        scale=(0.15, 0.02),  # Size of the button
+        position=(0, 0),  # Position on the screen
         on_click = lambda: toggle_mouse_lock()
     )
     if saved_world_name != None:
@@ -1593,11 +1573,9 @@ def build_pause_menu():
         parent=pause_menu,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Save World',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.2, 0.025),
-        position=(0, -0.1, -1),  
+        color=color.gray,
+        scale=(0.15, 0.02),
+        position=(0, -0.1),  
         on_click = lambda: save_world(f'{script_dir}\\PyCraft\\Worlds\\{saved_world_name}')
         )
     else:
@@ -1605,11 +1583,9 @@ def build_pause_menu():
             parent=pause_menu,
             font="PyCraft/Textures/Fonts/mc.ttf",
             text='Save World',
-            color=color.light_gray,
-            texture="PyCraft/Textures/buttontexture.png",
-            highlight_color=color.rgb(0.745, 0.729, 1),
-            scale=(0.2, 0.025),
-            position=(0, -0.1, -1),  
+            color=color.gray,
+            scale=(0.15, 0.02),
+            position=(0, -0.1),  
             on_click = lambda: toggle_save_field()
         )
         def toggle_save_field():
@@ -1623,17 +1599,15 @@ def build_pause_menu():
                     parent=pause_menu,
                     default_value='World Name',
                     scale=(0.15, 0.02), 
-                    position=(0.15, -0.1, -1)
+                    position=(0.15, -0.1)
                     )
                 confirm_save_button = Button(
                     parent=pause_menu,
                     font="PyCraft/Textures/Fonts/mc.ttf",
                     text='Confirm',
-                    color=color.light_gray,
-                    texture="PyCraft/Textures/buttontexture.png",
-                    highlight_color=color.rgb(0.745, 0.729, 1),
-                    scale=(0.2, 0.025),
-                    position=(0.3, -0.1, -1),  
+                    color=color.gray,
+                    scale=(0.15, 0.02),
+                    position=(0.3, -0.1),  
                     on_click = lambda: save_world(f'{script_dir}\\PyCraft\\Worlds\\{save_name_field.text}.json')
                 )
                 save_field_open = True
@@ -1642,11 +1616,9 @@ def build_pause_menu():
         parent=pause_menu,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Load World',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.2, 0.025), 
-        position=(0, -0.2, -1),  
+        color=color.gray,
+        scale=(0.15, 0.02), 
+        position=(0, -0.2),  
         on_click = lambda: load_world()
     )
 
@@ -1655,193 +1627,87 @@ def build_pause_menu():
         parent=pause_menu,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Quit',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.2, 0.025), 
-        position=(0, -0.15, -1),  
+        color=color.gray,
+        scale=(0.15, 0.02), 
+        position=(0, -0.15),  
         on_click = application.quit
     )
     settings_button = Button(
         parent=pause_menu,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Settings',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.2, 0.025), 
-        position=(0, -0.05, -1),  
+        color=color.gray,
+        scale=(0.15, 0.02), 
+        position=(0, -0.05),  
         on_click = lambda: open_settings()
     )
-    pause_label = Entity(
+    pause_label = Text(
     parent=pause_menu,
-    model='quad',
-    texture = 'PyCraft/Textures/pausedlabel.png',
-    scale=(0.35, 0.15),
-    position=(0, 0.15, -1),
-    visible=True  
+    font="PyCraft/Textures/Fonts/mc.ttf",
+    text='Paused',   
+    origin=(0, 0),      
+    scale=2,            
+    color=color.white,   
+    position=(0, 0.1),            
     )   
 
 def leavetomenu():
     destroy_pause_menu()
     build_main_menu()
 
-multiplayer_menu_open = False
-menu_settings_open = False
 def build_main_menu():
-    global mainbackground,title_screen_open,titletext,tiptext,singleplayer_button,multiplayer_button,menu_quit_button,main_menu_open, mod_menu_button, multiplayer_menu_open, menu_settings_button, menu_settings_open, version_text
+    global mainbackground,titletext,play_button,menu_quit_button,main_menu_open, mod_menu_button
     if play_menu_open:
         destroy_play_menu()
-    if multiplayer_menu_open:
-        multiplayer_menu_open = False
-        destroy(comingsoon)
-        destroy(returntomenu_button)
-        destroy(mainbackground)
-    if menu_settings_open:
-        menu_settings_open = False
-        destroy(settings_text)
-        destroy(returntomenu_button)
-        destroy(mainbackground)
-        destroy(fullscreen_button)
-    quips = ["Minecraft, but worse!", "Created by Mabindy!", "Minecraft.. in Python!?", f"Version {game_version}", "Minecraft, but really small!", "Added Herobrine", "Removed Herobrine", "You couldn't afford real Minecraft?", "Minecraft, with a gun.. for some reason", "O_O"]
     main_menu_open = True
-    title_screen_open = True
     mainbackground = Entity(
     parent=camera.ui,
     model='quad',
-    texture = 'PyCraft/Textures/wallpaper.png',
-    scale=(1.8, 1, -1),  
+    texture = 'PyCraft/Textures/menubackground.jpg',
+    scale=(2, 2, -1),  
     visible=True  
     )
     titletext = Entity(
     parent=camera.ui,
     model='quad',
     texture = 'PyCraft/Textures/titlelogo.png',
-    scale=(0.75, 0.3),
+    scale=(0.5, 0.2),
     position=(0,0.25),
     visible=True  
     )
-    tiptext = Text(
-    parent=camera.ui,
-    font="PyCraft/Textures/Fonts/mc.ttf",
-    text=quips[random.randint(0,len(quips)-1)],   
-    origin=(0, 0),      
-    scale=1.5,
-    rotation_z = -20,            
-    color=color.yellow,   
-    position=(0.25, 0.2),            
-    )
-    version_text = Text(
-    parent=camera.ui,
-    font="PyCraft/Textures/Fonts/mc.ttf",
-    text=f'Version {game_version}',   
-    origin=(0, 0),      
-    scale=1,            
-    color=color.white,   
-    position=(-0.8, -0.48),            
-    )
-    singleplayer_button = Button(
+    play_button = Button(
         parent=camera.ui,
         font="PyCraft/Textures/Fonts/mc.ttf",
-        text='Singleplayer',
-        color=color.light_gray,
-        scale=(0.5, 0.05),
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
+        text='Play',
+        color=color.gray,
+        scale=(0.25, 0.04),
         position=(0, 0),  
         on_click = lambda: open_play_menu()
-    )
-    multiplayer_button = Button(
-        parent=camera.ui,
-        font="PyCraft/Textures/Fonts/mc.ttf",
-        text='Multiplayer',
-        color=color.light_gray,
-        scale=(0.5, 0.05),
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        position=(0, -0.1),  
-        on_click = lambda: open_multiplayer_menu()
-    )
-    menu_settings_button = Button(
-        parent=camera.ui,
-        font="PyCraft/Textures/Fonts/mc.ttf",
-        text='Settings',
-        color=color.light_gray,
-        scale=(0.5, 0.05),
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        position=(0, -0.2),  
-        on_click = lambda: open_menu_settings()
     )
     mod_menu_button = Button(
         parent=camera.ui,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Mods',
-        color=color.light_gray,
-        scale=(0.225, 0.05),
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        position=(-0.1375, -0.3),  
+        color=color.gray,
+        scale=(0.25, 0.04),
+        position=(0, -0.1),  
         on_click = lambda: open_mod_menu()
     )
     menu_quit_button = Button(
         parent=camera.ui,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Quit',
-        color=color.light_gray,
-        scale=(0.225, 0.05),
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        position=(0.1375, -0.3),  
+        color=color.gray,
+        scale=(0.25, 0.04),
+        position=(0, -0.2),  
         on_click = application.quit
     )
 
 def destroy_main_menu():
-    global title_screen_open
     destroy(titletext)
-    destroy(singleplayer_button)
-    destroy(multiplayer_button)
+    destroy(play_button)
     destroy(menu_quit_button)
     destroy(mod_menu_button)
-    destroy(tiptext)
-    destroy(menu_settings_button)
-    destroy(version_text)
-    title_screen_open = False
-
-def open_menu_settings():
-    global menu_settings_open, comingsoon, returntomenu_button, settings_text, fullscreen_button
-    destroy_main_menu()
-    menu_settings_open = True
-    settings_text = Entity(
-    parent=camera.ui,
-    model='quad',
-    texture = 'PyCraft/Textures/settingslabel.png',
-    scale=(0.75, 0.3),
-    position=(0,0.25),
-    visible=True  
-    )
-    fullscreen_button = Button(
-        parent=camera.ui,
-        font="PyCraft/Textures/Fonts/mc.ttf",
-        text='Fullscreen: Disabled' if not window.fullscreen else 'Fullscreen: Enabled',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.5, 0.05),
-        position=(0, 0), 
-        on_click = lambda: toggle_fullscreen()
-    )
-    returntomenu_button = Button(
-        parent=camera.ui,
-        font="PyCraft/Textures/Fonts/mc.ttf",
-        text='Back',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.5, 0.05),
-        position=(0, -0.15, -1),  
-        on_click = lambda: build_main_menu()
-    )
 
 def open_mod_menu():
     global mod_buttons, back_to_main_menu_button, mod_states, mod_labels
@@ -1873,9 +1739,7 @@ def open_mod_menu():
     back_to_main_menu_button = Button(
         parent = camera.ui,
         text = 'Back',
-        color = color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
+        color = color.gray,
         scale = (0.25, 0.04),
         position = (0, -0.4),
         on_click = lambda: back_to_main_menu()
@@ -1902,53 +1766,24 @@ def back_to_main_menu():
     destroy(mainbackground)
     build_main_menu()
 
-def open_multiplayer_menu():
-    global multiplayer_menu_open, comingsoon, returntomenu_button
-    destroy_main_menu()
-    multiplayer_menu_open = True
-    comingsoon = Text(
-    parent=camera.ui,
-    font="PyCraft/Textures/Fonts/mc.ttf",
-    text='Coming in the future!',   
-    origin=(0, 0),      
-    scale=2,            
-    color=color.white,   
-    position=(0, 0),            
-    )
-    returntomenu_button = Button(
-        parent=camera.ui,
-        font="PyCraft/Textures/Fonts/mc.ttf",
-        text='Back',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.5, 0.05),
-        position=(0, -0.15, -1),  
-        on_click = lambda: build_main_menu()
-    )
-
-
 creative = False
 def open_play_menu():
-    global file_buttons, createworld_button, worldseedinput, play_menu_open, returntomenu_button, creative, mode_select_button, world_size, world_dimensions_button, world_depth_button, world_depth
+    global file_buttons, createworld_button, worldseedinput, play_menu_open, returntomenu_button, creative, mode_select_button
     destroy_main_menu()
     play_menu_open = True
     folder_path = f'{script_dir}\\PyCraft\\Worlds'
     files = os.listdir(folder_path)
     scroll_container = Entity(parent=camera.ui, position = (0,0.3), scale=(1,1), visible=True)
     scroll_offset = 0
+
     file_buttons = []
-    world_size = 10
-    world_depth = 4
     for i, file_name in enumerate(files):
         filepath = f'{script_dir}/PyCraft/Worlds/{file_name}'
         worldfilebutton = Button(
             parent=scroll_container,
             font="PyCraft/Textures/Fonts/mc.ttf",
             text=file_name,
-            color=color.light_gray,
-            texture="PyCraft/Textures/buttontexture.png",
-            highlight_color=color.rgb(0.745, 0.729, 1),
+            color=color.gray,
             scale=(0.25,0.05),
             position=(-0.25, (-i * 0.06) + 0.1, -2),
             on_click = lambda file_name=file_name: load_world(f'{script_dir}\\PyCraft\\Worlds\\{file_name}')
@@ -1964,9 +1799,7 @@ def open_play_menu():
             parent=scroll_container,
             font="PyCraft/Textures/Fonts/mc.ttf",
             text='Delete',
-            color=color.rgb(1, 0.28, 0.28),
-            texture="PyCraft/Textures/buttontexture.png",
-            highlight_color=color.rgb(0.745, 0.729, 1),
+            color=color.red,
             scale=(0.15,0.05),
             position=(0.25, (-i * 0.06) + 0.1, -2),
             on_click = lambda file_name=file_name: delete_world(f'{script_dir}/PyCraft/Worlds/{file_name}')
@@ -1986,45 +1819,19 @@ def open_play_menu():
         parent=camera.ui,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Create World',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
+        color=color.gray,
         scale=(0.25, 0.04),
         position=(0, -0.15, -1),  
-        on_click = lambda: generate_world(worldseedinput.text, int(world_size/2), world_depth)
+        on_click = lambda: generate_world(worldseedinput.text)
     )
     mode_select_button = Button(
         parent=camera.ui,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Mode: Creative' if creative else 'Mode: Survival',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
+        color=color.gray,
         scale=(0.2, 0.04),
         position=(0.275, -0.15, -1),  
         on_click = lambda: toggle_mode()
-    )
-    world_dimensions_button = Button(
-        parent=camera.ui,
-        font="PyCraft/Textures/Fonts/mc.ttf",
-        text='World Size: 10x10',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.23, 0.04),
-        position=(0.275, -0.2, -1),  
-        on_click = lambda: toggle_world_size()
-    )
-    world_depth_button = Button(
-        parent=camera.ui,
-        font="PyCraft/Textures/Fonts/mc.ttf",
-        text='World Depth: 4',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
-        scale=(0.23, 0.04),
-        position=(0.275, -0.25, -1),  
-        on_click = lambda: toggle_world_depth()
     )
     worldseedinput = InputField(
         default_value='Seed',
@@ -2039,9 +1846,7 @@ def open_play_menu():
         parent=camera.ui,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Back',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
+        color=color.gray,
         scale=(0.25, 0.04),
         position=(-0.3, -0.15, -1),  
         on_click = lambda: build_main_menu()
@@ -2052,37 +1857,6 @@ def toggle_mode():
     creative = not creative
     mode_select_button.text = 'Mode: Creative' if creative else 'Mode: Survival'
 
-def toggle_world_size():
-    global world_dimensions_button, world_size
-    if world_dimensions_button.text == 'World Size: 10x10':
-        world_size = 12
-        world_dimensions_button.text = 'World Size: 12x12'
-    elif world_dimensions_button.text == 'World Size: 12x12':
-        world_size = 16
-        world_dimensions_button.text = 'World Size: 16x16'
-    elif world_dimensions_button.text == 'World Size: 16x16':
-        world_size = 20
-        world_dimensions_button.text = 'World Size: 20x20'
-    elif world_dimensions_button.text == 'World Size: 20x20':
-        world_size = 8
-        world_dimensions_button.text = 'World Size: 8x8'
-    else:
-        world_size = 10
-        world_dimensions_button.text = 'World Size: 10x10'
-def toggle_world_depth():
-    global world_depth_button, world_depth
-    if world_depth_button.text == 'World Depth: 4':
-        world_depth = 6
-        world_depth_button.text = 'World Depth: 6'
-    elif world_depth_button.text == 'World Depth: 6':
-        world_depth = 8
-        world_depth_button.text = 'World Depth: 8'
-    elif world_depth_button.text == 'World Depth: 8':
-        world_depth = 10
-        world_depth_button.text = 'World Depth: 10'
-    elif world_depth_button.text == 'World Depth: 10':
-        world_depth = 4
-        world_depth_button.text = 'World Depth: 4'
 def destroy_play_menu():
     global file_buttons, main_menu_open
     destroy(mainbackground)
@@ -2090,8 +1864,6 @@ def destroy_play_menu():
     destroy(worldseedinput)
     destroy(returntomenu_button)
     destroy(mode_select_button)
-    destroy(world_depth_button)
-    destroy(world_dimensions_button)
     for i in file_buttons:
         destroy(i)
     file_buttons = []
@@ -2477,9 +2249,7 @@ def build_death_screen():
         parent=death_background,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Respawn',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
+        color=color.gray,
         scale=(0.15, 0.02),  # Size of the button
         position=(0, 0),  # Position on the screen
         on_click = lambda: destroy_death_screen()
@@ -2488,9 +2258,7 @@ def build_death_screen():
         parent=death_background,
         font="PyCraft/Textures/Fonts/mc.ttf",
         text='Quit',
-        color=color.light_gray,
-        texture="PyCraft/Textures/buttontexture.png",
-        highlight_color=color.rgb(0.745, 0.729, 1),
+        color=color.gray,
         scale=(0.15, 0.02),  # Size of the button
         position=(0, -0.05),  # Position on the screen
         on_click = application.quit
@@ -2543,32 +2311,33 @@ def input(key):
         return
     if mouse.locked:
         if creative:
-            if key == 'left mouse down':
+            if (key == 'left mouse down' and mouse.hovered_entity and mouse.hovered_entity != player) or (key == 'left mouse down' and selected == 'ak'):
+                if hasattr(mouse.hovered_entity, 'destroyable') and not mouse.hovered_entity.destroyable:
 
-                if selected == 'ak':
-                        hand.animate_rotation((160, 0, 180), duration=0.1, curve=curve.in_out_expo)
-                                
-                        invoke(hand.animate_rotation, defrot, duration=0.1, curve=curve.in_out_expo, delay=0.1)
+                    pass
                 else:
-                    hand.rotation = defrot
-                    hand.animate_rotation(selectedvoxel.animationrotation if hasattr(selectedvoxel, 'animationrotation') else (110, -30, 0), duration=0.2, curve=curve.in_out_quad)
-                    invoke(hand.animate_rotation, defrot, duration=0.2, curve=curve.in_out_quad, delay=0.2)
-                    if mouse.hovered_entity and mouse.hovered_entity != player:
-                        if hasattr(mouse.hovered_entity, 'destroyable') and not mouse.hovered_entity.destroyable:
-                            pass
-                        else:
-                            position = mouse.hovered_entity.position
-                            destroy(mouse.hovered_entity)
-                            block_class = type(mouse.hovered_entity)
-                            texture = mouse.hovered_entity.texture
-                            if not 'Fire' in f"{block_class}":
-                                DroppedBlock(position=position, texture=texture, block_class=block_class)
+                    if selected == 'ak':
+                            hand.animate_rotation((160, 0, 180), duration=0.1, curve=curve.in_out_expo)
                                 
-                            for block in world_data:
-                                if block['position'] == [position.x, position.y, position.z]:
-                                    world_data.remove(block)
-                                    break
+                            invoke(hand.animate_rotation, defrot, duration=0.1, curve=curve.in_out_expo, delay=0.1)
+                    else:
+                        position = mouse.hovered_entity.position
+                        destroy(mouse.hovered_entity)
+                        block_class = type(mouse.hovered_entity)
+                        texture = mouse.hovered_entity.texture
+                        if not 'Fire' in f"{block_class}":
+                            DroppedBlock(position=position, texture=texture, block_class=block_class)
+                        
+                        for block in world_data:
+                            if block['position'] == [position.x, position.y, position.z]:
+                                world_data.remove(block)
+                                break
+
+                        hand.rotation = defrot
+
+                        hand.animate_rotation(selectedvoxel.animationrotation if hasattr(selectedvoxel, 'animationrotation') else (110, -30, 0), duration=0.2, curve=curve.in_out_quad)
                             
+                        invoke(hand.animate_rotation, defrot, duration=0.2, curve=curve.in_out_quad, delay=0.2)
         else:
             if key == 'left mouse down':
                 if mouse.hovered_entity and hasattr(mouse.hovered_entity, 'isblock') and mouse.hovered_entity.isblock:
@@ -2621,7 +2390,7 @@ def input(key):
             defrot = (0,0,0)
             update_hand_properties(hand, model=blockmodel, texture=blocktexture, color=color.rgb(voxcolor.r, voxcolor.g, voxcolor.b), scale=(0.5,0.5,0.5) if blockmodel == 'cube' else (0.25, 0.25, 0.25), origin_y=0 if blockmodel == 'cube' else 1, rotation=(0,0,0), position=(0,0,0))
         if key == 'right mouse down':
-            hit_info = raycast(camera.world_position, camera.forward, distance=7, ignore=(player,))
+            hit_info = raycast(camera.world_position, camera.forward, distance=5, ignore=(player,))
             if hit_info.hit and selectedvoxel and not hasattr(hit_info.entity, 'wall') and not hasattr(selectedvoxel, 'istool'):
                 new_position = hit_info.entity.position + hit_info.normal
                 if selectedvoxel == FlintAndSteel:
@@ -2686,25 +2455,6 @@ def input(key):
                 position=(-0.5, 0.39),            
                 )
                 debugOpen = True
-        if key == 'f1':
-            global cinematicMode
-            if not cinematicMode:
-                cinematicMode = True
-                hotbar.visible = False
-                selector.visible = False
-                for i in slots:
-                    i.visible = False
-                player.cursor.visible = False
-                hand.visible = False
-            else:
-                cinematicMode = False
-                hotbar.visible = True
-                selector.visible = True
-                for i in slots:
-                    i.visible = True
-                player.cursor.visible = True
-                hand.visible = True
-                
         if key == '1':
             if slot1.equipped and slot1.equipped != 'gun':
                 selectedvoxel = slot1.equipped
@@ -3110,8 +2860,9 @@ class CustomFirstPersonController(Entity):
         self._original_camera_transform = camera.transform  # store original position and rotation
         camera.world_parent = scene
 
-transition_speed = 1/1200  # Adjust the speed of the color change. original time is 1/1200
+transition_speed = 1/15  # Adjust the speed of the color change. original time is 1/1200
 light_to_dark = True  # Flag to determine the direction of transition
+
 last_y_position = None
 fall_start_y = None
 is_falling = False
@@ -3125,7 +2876,7 @@ def animatehand():
     invoke(hand.animate_rotation, defrot, duration=0.2, curve=curve.in_out_quad, delay=0.2)
 
 def update():
-    global fov_slider, issprinting, iscrouching, paused, last_y_position, fall_start_y, health, is_falling, light_to_dark, currently_breaking_block, block_break_start_time, mouse_held, overlay_entity, mining_animation_running, coordslabel, tiptext, title_screen_open
+    global fov_slider, issprinting, iscrouching, paused, last_y_position, fall_start_y, health, is_falling, light_to_dark, currently_breaking_block, block_break_start_time, mouse_held, overlay_entity, mining_animation_running, coordslabel
     if paused:
         player.enabled = False
         return
@@ -3162,9 +2913,9 @@ def update():
     if debugOpen:
         coordslabel.text = f'Coordinates: X:{int(player.position.x)} Y:{int(player.position.y)} Z:{int(player.position.z)}'
     last_y_position = current_y
+    if worldgenerated:
+        update_visible_chunks(player.position)
     update_hand_position(   )
-    if title_screen_open:
-        tiptext.scale = 1.5 + math.sin(time.time() * 2) * 0.1
     if holding_block:
         block_drag.position = Vec3(mouse.x, mouse.y, -1.1)
     if held_keys['shift']:
